@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KROT: Storm Rider</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            background-color: #0b0b0b;
+            color: #d4af37;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        canvas {
+            /* ИЗМЕНЕНО: Сделали само поле действия голубым градиентом */
+            background: linear-gradient(to bottom, #4a90e2, #1b4f72);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+            border: 2px solid #d4af37;
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(212, 175, 55, 0.5);
+            pointer-events: none;
+        }
+        .screen {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(11, 11, 11, 0.95);
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            color: #d4af37;
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        p {
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            background: #d4af37;
+            color: #0b0b0b;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+            transition: 0.2s;
+        }
+        .btn:active {
+            transform: scale(0.95);
+            background: #aa8c2c;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>МЕТРЫ: <span id="score">0</span></div>
+        <div>ШТОРМ: <span id="stormLevel">1</span> УР</div>
+    </div>
+
+    <!-- Стартовый экран -->
+    <div id="startScreen" class="screen">
+        <h1>KROT: Storm Rider</h1>
+        <p>Удерживай корабль на волнах, уворачивайся от рифов. Чем дальше — тем сильнее шторм!</p>
+        <button class="btn" onclick="startGame()">В ПУТЬ!!!🌊</button>
+    </div>
+
+    <!-- Экран смерти -->
+    <div id="gameOverScreen" class="screen hidden">
+        <h1>Корабль разбит!</h1>
+        <p>Ты продержался: <span id="finalScore">0</span> метров</p>
+        <button class="btn" onclick="startGame()">ПЕРЕЗАПУСК</button>
+    </div>
+
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let score = 0;
+        let stormLevel = 1;
+        let isPlaying = false;
+        let gameInterval;
+        let ship, obstacles, waveOffset;
+
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            ship = {
+                x: canvas.width / 2,
+                y: canvas.height - 100,
+                width: 30,
+                height: 40,
+                speed: 5,
+                targetX: canvas.width / 2
+            };
+            obstacles = [];
+            score = 0;
+            stormLevel = 1;
+            waveOffset = 0;
+            isPlaying = true;
+            clearInterval(gameInterval);
+            gameInterval = setInterval(update, 1000 / 60);
+        }
+
+        // Управление (мышь / тач)
+        window.addEventListener('mousemove', (e) => {
+            if (!isPlaying) return;
+            const rect = canvas.getBoundingClientRect();
+            ship.targetX = e.clientX - rect.left;
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isPlaying) return;
+            const rect = canvas.getBoundingClientRect();
+            ship.targetX = e.touches[0].clientX - rect.left;
+        });
+
+        function spawnObstacle() {
+            obstacles.push({
+                x: Math.random() * (canvas.width - 40),
+                y: -50,
+                width: 40 + Math.random() * 20,
+                height: 20,
+                speed: 3 + stormLevel * 0.8
+            });
+        }
+
+        let spawnTimer = 0;
+        function update() {
+            ship.x += (ship.targetX - ship.x) * 0.1;
+            if (ship.x < 15) ship.x = 15;
+            if (ship.x > canvas.width - 15) ship.x = canvas.width - 15;
+
+            score += 1;
+            stormLevel = Math.floor(score / 500) + 1;
+            document.getElementById('score').innerText = score;
+            document.getElementById('stormLevel').innerText = stormLevel;
+
+            spawnTimer++;
+            if (spawnTimer > Math.max(30, 90 - stormLevel * 10)) {
+                spawnObstacle();
+                spawnTimer = 0;
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].y += obstacles[i].speed;
+
+                if (
+                    ship.x - ship.width/2 < obstacles[i].x + obstacles[i].width &&
+                    ship.x + ship.width/2 > obstacles[i].x &&
+                    ship.y - ship.height/2 < obstacles[i].y + obstacles[i].height &&
+                    ship.y + ship.height/2 > obstacles[i].y
+                ) {
+                    gameOver();
+                }
+
+                if (obstacles[i].y > canvas.height) {
+                    obstacles.splice(i, 1);
+                }
+            }
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Отрисовка бушующих волн (фон)
+            waveOffset += 0.05 * stormLevel;
+            
+            /* ИЗМЕНЕНО: Сделали цвет волн потемнее (#154360 вместо золотого) */
+            ctx.strokeStyle = '#154360'; 
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                let yPos = (i * 120 + waveOffset * 20) % canvas.height;
+                ctx.moveTo(0, yPos);
+                for (let x = 0; x < canvas.width; x += 20) {
+                    ctx.lineTo(x, yPos + Math.sin(x * 0.02 + waveOffset) * (10 * stormLevel));
+                }
+                ctx.stroke();
+            }
+
+            // Отрисовка корабля (золотой треугольник-яхта KROT)
+            ctx.fillStyle = '#d4af37';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#d4af37';
+            ctx.beginPath();
+            ctx.moveTo(ship.x, ship.y - ship.height / 2);
+            ctx.lineTo(ship.x - ship.width / 2, ship.y + ship.height / 2);
+            ctx.lineTo(ship.x + ship.width / 2, ship.y + ship.height / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.shadowBlur = 0; 
+
+            // Отрисовка рифов
+            /* ИЗМЕНЕНО: Сделали объекты серыми (#707b7c вместо красного) */
+            ctx.fillStyle = '#707b7c'; 
+            for (let obs of obstacles) {
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            }
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            clearInterval(gameInterval);
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
